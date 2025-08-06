@@ -2,61 +2,71 @@ import json
 import sys
 import csv
 from pathlib import Path
-from collections.abc import MutableMapping
+from collections import abc, OrderedDict
+from typing import Dict
 
 _SEP = '.'
 
 
-def flatten_dict(d: dict, parent_key: str = '') -> dict:
-    items = []
+def _flatten_dict(d: Dict, parent_key: str = '',
+                  sep: str = _SEP) -> OrderedDict:
+    """Flatten dictionary while maintaining key order using OrderedDict."""
+    items = OrderedDict()
     for k, v in d.items():
-        new_key = f"{parent_key}{_SEP}{k}" if parent_key else k
-        if isinstance(v, MutableMapping):
-            items.extend(flatten_dict(v, new_key).items())
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, abc.MutableMapping):
+            items.update(_flatten_dict(v, new_key, sep))
         else:
-            items.append((new_key, v))
-    return dict(items)
+            items[new_key] = str(v) if v is not None else ''
+    return items
 
 
-def json_to_csv(input_file: Path, output_file: Path, delimiter_sym: str):
-    # We collect all keys from all objects for CSV headers.
-    fieldnames = dict()
+def json_to_csv(input_file: Path, output_file: Path,
+                delimiter_sym: str) -> int:
+    """
+    Convert JSON logs to CSV while maintaining field order from first occurrence.
+    Uses single-pass processing when possible.
+    """
+    field_order = OrderedDict()  # Maintains insertion order for fields.
+    rows = []
+    has_errors = False
 
-    # First pass: collect all possible fields.
     with open(input_file, 'r', encoding='utf-8') as f:
         for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:  # Skip empty lines.
+                continue
+
             try:
-                data = flatten_dict(json.loads(line.strip()))
+                # Get flattened data with original field order.
+                data = _flatten_dict(json.loads(line))
+
+                # Update field order with new keys (maintains first occurrence order).
                 for key in data.keys():
-                    if key not in fieldnames:
-                        fieldnames[key] = None
+                    if key not in field_order:
+                        field_order[key] = None
+
+                rows.append(data)
             except json.JSONDecodeError as e:
                 print(
-                    f"Failed to read the line {line_num}: {line.strip()}. Error: {e}",
+                    f"Skip line {line_num}: {line}. Error: {e}",
                     file=sys.stderr)
-                return 1
+                has_errors = True
+                continue
 
-    if not fieldnames:
+    if not field_order:
         print("No valid JSON object detected in source", file=sys.stderr)
         return 1
 
-    # Second pass: write data.
+    # Write data with fields in order of first appearance.
     with open(output_file, 'w', encoding='utf-8', newline='') as csvfile:
         writer = csv.DictWriter(
             csvfile,
-            fieldnames=fieldnames.keys(),
-            delimiter=delimiter_sym)
+            fieldnames=field_order.keys(),
+            delimiter=delimiter_sym,
+            extrasaction='ignore'  # Ignore extra keys not in fieldnames.
+        )
         writer.writeheader()
+        writer.writerows(rows)
 
-        with open(input_file, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                try:
-                    data = flatten_dict(json.loads(line.strip()))
-                    writer.writerow(data)
-                except json.JSONDecodeError as e:
-                    print(
-                        f"Skip line {line_num}: {line.strip()}. Error: {e}",
-                        file=sys.stderr)
-                    return 1
-
-    return 0
+    return 1 if has_errors else 0
