@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="j2c",
-    version="0.2",
+    version="0.3",
     description="JSON logs to CSV table converter",
     packages=find_packages(),
     python_requires=">=3.6",
