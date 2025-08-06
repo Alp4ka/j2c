@@ -11,14 +11,14 @@ def json_to_csv(input_file: Path, output_file: Path, delimiter_sym: str):
 
     # First pass: collect all possible fields.
     with open(input_file, 'r', encoding='utf-8') as f:
-        for line in f:
+        for line_num, line in enumerate(f, 1):
             try:
                 data = json.loads(line.strip())
                 for key in data.keys():
                     if key not in fieldnames:
                         fieldnames[key] = None
             except json.JSONDecodeError as e:
-                print(f"Failed to read a new line: {line.strip()}. Error: {e}", file=sys.stderr)
+                print(f"Failed to read the line {line_num}: {line.strip()}. Error: {e}", file=sys.stderr)
                 return 1
 
     if not fieldnames:
