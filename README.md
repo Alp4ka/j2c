@@ -9,7 +9,9 @@ A lightweight Python tool that converts newline-delimited JSON files to CSV with
 - Easy command-line interface.
 
 ## Installation
-TODO
+```bash
+pip install git+https://github.com/Alp4ka/j2c.git
+```
 
 ## Usage
 ### CLI
